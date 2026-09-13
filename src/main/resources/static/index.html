@@ -207,6 +207,7 @@
     <button class="view-btn" data-view="stats">Stats</button>
     <button class="view-btn" data-view="table">Table</button>
   </div>
+  <button id="export-btn" title="Download the graph as a self-contained SVG image (for READMEs etc.)">Export SVG</button>
   <button id="refresh-btn">Refresh from GitHub</button>
 </header>
 <div id="chart">
@@ -248,6 +249,7 @@ const zoomLayer = svg.append("g");
 svg.call(d3.zoom().scaleExtent([0.2, 6]).on("zoom", e => zoomLayer.attr("transform", e.transform)));
 
 let simulation = null;
+let lastGraph = null;
 
 function nodeRadius(degree) { return 6 + 2.5 * Math.sqrt(degree); }
 
@@ -270,6 +272,7 @@ function showTooltip(event, html) {
 function hideTooltip() { tooltip.style.display = "none"; }
 
 function render(graph) {
+  lastGraph = graph;
   emptyEl.style.display = graph.nodes.length ? "none" : "flex";
   zoomLayer.selectAll("*").remove();
   if (simulation) simulation.stop();
@@ -403,6 +406,100 @@ async function loadGraph() {
   const res = await fetch("/graph");
   render(await res.json());
 }
+
+// Builds a standalone SVG of the current graph: theme colors and label styles
+// baked into attributes (no external CSS), a background, a legend, and a
+// viewBox fitted to the content. Global so it is scriptable for automation.
+function buildExportSvg() {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+  const css = getComputedStyle(document.documentElement);
+  const resolve = v => v.replace(/var\((--[\w-]+)\)/g, (_, n) => css.getPropertyValue(n).trim());
+  const surface = css.getPropertyValue("--surface-1").trim();
+  const ink = css.getPropertyValue("--text-secondary").trim();
+
+  const bbox = zoomLayer.node().getBBox();
+  const pad = 24;
+
+  const clone = svg.node().cloneNode(true);
+  const cloneLayer = clone.querySelector("g");
+  cloneLayer.removeAttribute("transform");
+  clone.querySelectorAll('line[stroke="transparent"], circle[fill="transparent"]')
+    .forEach(el => el.remove());
+
+  // Legend row under the graph, only for node types actually present.
+  const typesPresent = [...new Set(lastGraph.nodes.map(n => n.type))].filter(t => TYPES[t]);
+  const legendY = bbox.y + bbox.height + 36;
+  const legend = document.createElementNS(SVGNS, "g");
+  let lx = bbox.x;
+  for (const t of typesPresent) {
+    const spec = TYPES[t];
+    const mark = document.createElementNS(SVGNS, "path");
+    mark.setAttribute("d", d3.symbol(spec.symbol, 90)());
+    mark.setAttribute("transform", `translate(${lx + 7},${legendY})`);
+    mark.setAttribute("fill", spec.color);
+    legend.appendChild(mark);
+    const label = document.createElementNS(SVGNS, "text");
+    label.setAttribute("x", lx + 18);
+    label.setAttribute("y", legendY + 4);
+    label.textContent = spec.label;
+    legend.appendChild(label);
+    lx += 26 + spec.label.length * 6.6 + 18;
+  }
+  cloneLayer.appendChild(legend);
+
+  // Inline what the page stylesheet normally provides.
+  clone.querySelectorAll("text").forEach(t => {
+    t.removeAttribute("class");
+    t.setAttribute("font-size", "11");
+    t.setAttribute("font-family", FONT);
+    t.setAttribute("fill", ink);
+    t.setAttribute("stroke", surface);
+    t.setAttribute("stroke-width", "3");
+    t.setAttribute("paint-order", "stroke");
+    t.setAttribute("stroke-linejoin", "round");
+  });
+  clone.querySelectorAll("[fill],[stroke]").forEach(el => {
+    for (const attr of ["fill", "stroke"]) {
+      const v = el.getAttribute(attr);
+      if (v && v.includes("var(")) el.setAttribute(attr, resolve(v));
+    }
+  });
+
+  const x0 = bbox.x - pad;
+  const y0 = bbox.y - pad;
+  const width = Math.max(bbox.width, lx - bbox.x) + 2 * pad;
+  const height = legendY + 10 - y0 + pad;
+  const background = document.createElementNS(SVGNS, "rect");
+  background.setAttribute("x", x0);
+  background.setAttribute("y", y0);
+  background.setAttribute("width", width);
+  background.setAttribute("height", height);
+  background.setAttribute("fill", surface);
+  clone.insertBefore(background, cloneLayer);
+
+  clone.setAttribute("xmlns", SVGNS);
+  clone.setAttribute("viewBox", `${x0} ${y0} ${width} ${height}`);
+  clone.setAttribute("width", Math.round(width));
+  clone.setAttribute("height", Math.round(height));
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+      + new XMLSerializer().serializeToString(clone);
+}
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  if (!lastGraph || !lastGraph.nodes.length) {
+    statusEl.textContent = "Nothing to export yet — refresh first.";
+    return;
+  }
+  const blob = new Blob([buildExportSvg()], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "identity-graph.svg";
+  a.click();
+  URL.revokeObjectURL(url);
+  statusEl.textContent = "Exported identity-graph.svg";
+});
 
 const statsView = document.getElementById("stats-view");
 const viewPanels = { graph: chartEl, stats: statsView, table: tableView };
