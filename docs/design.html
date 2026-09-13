@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Developer Identity Graph — Design</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-3: #898781;
+    --hairline: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --accent: #2a78d6;
+    --t-user: #2a78d6;
+    --t-repo: #008300;
+    --t-lang: #e87ba4;
+    --t-org: #eda100;
+    --code-bg: #f2f1ed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --ink-3: #898781;
+      --hairline: #2c2c2a;
+      --border: rgba(255,255,255,0.10);
+      --accent: #3987e5;
+      --t-user: #3987e5;
+      --t-repo: #008300;
+      --t-lang: #d55181;
+      --t-org: #c98500;
+      --code-bg: #232322;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+    --t-user: #3987e5;
+    --t-repo: #008300;
+    --t-lang: #d55181;
+    --t-org: #c98500;
+    --code-bg: #232322;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.6;
+    font-size: 15.5px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px 96px; }
+
+  header.doc { padding: 64px 0 40px; border-bottom: 1px solid var(--hairline); }
+  .eyebrow {
+    font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; margin: 0 0 14px;
+  }
+  h1 {
+    font-size: 40px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em;
+    margin: 0 0 16px; text-wrap: balance;
+  }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 60ch; margin: 0; }
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 26px; font-size: 12.5px; color: var(--ink-3); }
+  .meta span strong { color: var(--ink-2); font-weight: 600; }
+
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; padding: 22px 0 6px; }
+  nav.toc a {
+    font-size: 12.5px; color: var(--ink-2); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
+    background: var(--surface);
+  }
+  nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  section { padding-top: 48px; }
+  h2 {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h2 .no { color: var(--ink-3); font-weight: 500; margin-right: 10px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 16.5px; font-weight: 650; margin: 30px 0 8px; }
+  p { max-width: 70ch; margin: 12px 0; }
+  p, li { color: var(--ink); }
+  li { margin: 5px 0; max-width: 68ch; }
+  .note { color: var(--ink-2); font-size: 13.5px; border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; max-width: 66ch; }
+
+  code, pre {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.86em;
+  }
+  code { background: var(--code-bg); border-radius: 4px; padding: 1.5px 5px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; line-height: 1.55; font-size: 12.8px;
+  }
+  pre code { background: none; padding: 0; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; margin: 16px 0;
+  }
+  .diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  .caption { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; }
+
+  .table-scroll { overflow-x: auto; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  th { font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 600; padding: 2px 10px 2px 7px;
+    border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+    white-space: nowrap;
+  }
+  .chip .glyph { font-size: 11px; line-height: 1; }
+  .c-user .glyph { color: var(--t-user); } .c-repo .glyph { color: var(--t-repo); }
+  .c-lang .glyph { color: var(--t-lang); } .c-org .glyph { color: var(--t-org); }
+  .chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+
+  .decision { border-top: 1px solid var(--hairline); padding: 14px 0; }
+  .decision:first-of-type { border-top: none; }
+  .decision h4 { margin: 0 0 4px; font-size: 14.5px; font-weight: 650; }
+  .decision p { margin: 4px 0; font-size: 13.5px; color: var(--ink-2); max-width: 72ch; }
+  .decision .verdict { color: var(--accent); font-weight: 600; }
+
+  .endpoint { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.8px; white-space: nowrap; }
+  .method { display: inline-block; min-width: 42px; font-weight: 700; color: var(--accent); }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">Design document · v1</p>
+  <h1>Developer Identity Graph</h1>
+  <p class="lede">A single-user backend service that turns a developer's GitHub activity into a queryable, visual graph — repos, languages, collaborators, and organizations as nodes; ownership, authorship, and collaboration as weighted edges.</p>
+  <div class="meta">
+    <span><strong>Stack</strong> Java 21 · Spring Boot 4 · H2 · D3 v7</span>
+    <span><strong>Status</strong> Implemented &amp; verified end-to-end</span>
+    <span><strong>Scale target</strong> one developer's footprint (10²–10³ nodes)</span>
+  </div>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#data-model">Data model</a>
+    <a href="#ingestion">Ingestion</a>
+    <a href="#api">API</a>
+    <a href="#frontend">Frontend</a>
+    <a href="#decisions">Decisions</a>
+    <a href="#security">Security</a>
+    <a href="#ops">Operations</a>
+    <a href="#future">Future work</a>
+  </nav>
+</header>
+
+<section id="overview">
+  <h2><span class="no">1</span>Overview</h2>
+  <p>The system answers questions a résumé can't: <em>what do I actually build, in what languages, and with whom?</em> It ingests a GitHub account on demand, stores the result as a graph in two relational tables, and serves both a JSON API and a self-hosted visualization page.</p>
+  <h3>Goals</h3>
+  <ul>
+    <li>One-command run: <code>./mvnw spring-boot:run</code>, zero external services.</li>
+    <li>Work without credentials (public data), get strictly better with a token (private + org repos, 5000 req/hr).</li>
+    <li>Honest aggregates — language share weighted by bytes of code, collaboration weighted by shared commits.</li>
+    <li>Exportable output: a self-contained SVG suitable for a GitHub profile README.</li>
+  </ul>
+  <h3>Non-goals (v1)</h3>
+  <ul>
+    <li>Multi-tenant or hosted operation — this is a personal, localhost-first tool.</li>
+    <li>Live updates via webhooks (requires a public endpoint; polling is sufficient).</li>
+    <li>A dedicated graph database — the dataset is thousands of rows, not millions.</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2><span class="no">2</span>Architecture</h2>
+  <p>Three layers inside one Spring Boot process, plus a static frontend served from the same origin (which eliminates CORS entirely). The GitHub API is the only external dependency.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph browser["Browser — index.html"]
+    V1["Graph view (D3 force)"]
+    V2["Stats view"]
+    V3["Table view"]
+  end
+  subgraph app["Spring Boot process"]
+    C["GraphController<br/>REST layer"]
+    I["IngestionService<br/>@Async · @Transactional"]
+    G["GitHubClient<br/>credential resolution"]
+    R["Node / Edge repositories<br/>Spring Data JPA"]
+  end
+  DB[("H2 file DB<br/>nodes · edges")]
+  GH["GitHub REST API"]
+
+  V1 & V2 & V3 --> C
+  C -->|"POST /refresh"| I
+  C -->|reads| R
+  I --> G --> GH
+  I -->|rebuild| R
+  R --> DB
+</pre>
+  </div>
+  <p class="caption">Request flow. Reads never touch GitHub; writes happen only through the async refresh job.</p>
+</section>
+
+<section id="data-model">
+  <h2><span class="no">3</span>Data model</h2>
+  <p>Any graph fits in two tables: <code>nodes</code> and <code>edges</code>. Typing lives in enum columns rather than schema, so adding a node or edge kind is a code change, not a migration.</p>
+  <div class="chiprow">
+    <span class="chip c-user"><span class="glyph">●</span>USER</span>
+    <span class="chip c-repo"><span class="glyph">■</span>REPO</span>
+    <span class="chip c-lang"><span class="glyph">◆</span>LANGUAGE</span>
+    <span class="chip c-org"><span class="glyph">▲</span>ORGANIZATION</span>
+  </div>
+  <p class="caption">The four node types, with the shape + color encoding used everywhere in the UI. Collaborators are not a separate type — a collaborator is a <code>USER</code>, so the same person is always one node.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+erDiagram
+  NODES {
+    bigint id PK
+    varchar type "USER | REPO | LANGUAGE | ORGANIZATION"
+    varchar external_key UK "e.g. repo:octocat/hello-world"
+    varchar label
+  }
+  EDGES {
+    bigint id PK
+    bigint source_id FK
+    bigint target_id FK
+    varchar type "OWNS | WRITTEN_IN | ..."
+    double weight
+  }
+  NODES ||--o{ EDGES : "source / target"
+</pre>
+  </div>
+
+  <p><code>external_key</code> is the stable natural key from GitHub (<code>user:octocat</code>, <code>lang:Java</code>), unique-constrained so re-ingestion converges instead of duplicating. Edges are unique per <code>(source, target, type)</code>.</p>
+
+  <h3>Edge semantics</h3>
+  <p>Every edge carries a <code>weight</code>; its meaning is defined per type. This is the doc's most load-bearing table — the weight column is what makes aggregation honest.</p>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Edge</th><th>Direction</th><th>Weight</th><th>Source of truth</th></tr></thead>
+    <tbody>
+      <tr><td><code>OWNS</code></td><td>user → repo</td><td class="num">1.0 (binary)</td><td>repo listing, owner login match</td></tr>
+      <tr><td><code>WRITTEN_IN</code></td><td>repo → language</td><td class="num">bytes of code</td><td><code>/repos/{o}/{r}/languages</code></td></tr>
+      <tr><td><code>COLLABORATES_WITH</code></td><td>user → user</td><td class="num">Σ min(my commits, theirs) per shared repo</td><td><code>/repos/{o}/{r}/contributors</code></td></tr>
+      <tr><td><code>CONTRIBUTED_TO</code></td><td>user → repo not owned</td><td class="num">1.0, or push/PR event count</td><td>repo listing · public events (~90 days)</td></tr>
+      <tr><td><code>MEMBER_OF</code></td><td>user → organization</td><td class="num">1.0 (binary)</td><td><code>/users/{u}/orgs</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><strong>Bytes, not fractions.</strong> <code>WRITTEN_IN</code> stores absolute bytes so shares can be aggregated across repos — a 2&nbsp;MB Python repo outweighs a 10-line HTML one. Percentages (per repo, or across the whole account) are derived at read time. The collaboration weight is deliberately a <em>proxy</em>: true shared-commit analysis would require paging full commit history and isn't worth the API budget at this scale.</p>
+</section>
+
+<section id="ingestion">
+  <h2><span class="no">4</span>Ingestion pipeline</h2>
+  <p>Ingestion is a full rebuild inside a single transaction, triggered by <code>POST /refresh</code> and executed on a background thread. The steps below are a real sequence — order matters, because credentials are validated and the bulk lists fetched <em>before</em> anything is deleted.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+  participant B as Browser
+  participant C as GraphController
+  participant I as IngestionService
+  participant GH as GitHub API
+  participant DB as H2
+
+  B->>C: POST /refresh {username?, token?}
+  C->>C: resolve credentials (fail fast → 400)
+  C-->>B: 202 Accepted
+  loop poll every 1.5 s
+    B->>C: GET /status
+  end
+  C->>I: refresh(username, token)  [async]
+  I->>GH: GET /user or /users/{u} · list repos (paginated)
+  I->>DB: BEGIN · delete edges, nodes
+  loop each repo
+    I->>GH: languages · contributors
+    I->>DB: upsert nodes + edges
+  end
+  I->>GH: orgs · public events
+  I->>DB: COMMIT (or ROLLBACK on failure)
+  B->>C: GET /graph (fresh data)
+</pre>
+  </div>
+
+  <h3>Credential resolution</h3>
+  <p>Explicit request values win; <code>GITHUB_TOKEN</code> / <code>GITHUB_USERNAME</code> env vars are the fallback. The resolved pair selects one of four modes:</p>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Provided</th><th>Mode</th><th>Repos visible</th><th>Rate limit</th></tr></thead>
+    <tbody>
+      <tr><td>username only</td><td>public</td><td>public, owned only</td><td class="num">60 / hr</td></tr>
+      <tr><td>token only</td><td>own graph</td><td>private + org + collaborator</td><td class="num">5000 / hr</td></tr>
+      <tr><td>both, username = token's login</td><td>own graph</td><td>private + org + collaborator</td><td class="num">5000 / hr</td></tr>
+      <tr><td>both, someone else</td><td>public, authenticated</td><td>their public, owned only</td><td class="num">5000 / hr</td></tr>
+      <tr><td>neither</td><td>—</td><td colspan="2">rejected with 400 before any work starts</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The "username = token's login" comparison needs one <code>/user</code> call, so it resolves lazily — controller-side validation stays network-free. This rule exists because of a real bug: the UI remembers the username, so users naturally fill both fields, and the naive rule ("username present → public mode") silently dropped their private repos.</p>
+
+  <h3>Failure semantics</h3>
+  <ul>
+    <li><strong>Atomic rebuild.</strong> <code>@Transactional</code> wraps the wipe-and-rebuild; any failure (bad token, rate limit) rolls back and the previous graph survives. Verified live against a real rate-limit 403.</li>
+    <li><strong>Per-repo tolerance.</strong> Empty repos 404 on language/contributor endpoints; those are caught per iteration and skipped, never aborting the run.</li>
+    <li><strong>Observable errors.</strong> A token-free failure summary is stored and surfaced through <code>GET /status</code> (e.g. <em>"GitHub returned 403 — likely the rate limit; add a PAT"</em>), so the UI never reports false success.</li>
+    <li><strong>Single flight.</strong> An <code>AtomicBoolean</code> guard makes concurrent refreshes a 409, not a race.</li>
+  </ul>
+</section>
+
+<section id="api">
+  <h2><span class="no">5</span>API surface</h2>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Endpoint</th><th>Purpose</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="endpoint"><span class="method">GET</span>/graph</td><td>Full graph</td><td>flat <code>{nodes[], edges[]}</code>, shaped for D3</td></tr>
+      <tr><td class="endpoint"><span class="method">GET</span>/nodes/{id}/neighbors</td><td>1-hop traversal</td><td>node + touching edges + endpoints; 404 if unknown</td></tr>
+      <tr><td class="endpoint"><span class="method">GET</span>/stats</td><td>Aggregates</td><td>language shares (bytes + fraction), top-10 collaborators, counts</td></tr>
+      <tr><td class="endpoint"><span class="method">POST</span>/refresh</td><td>Re-ingest</td><td>body <code>{username?, token?}</code> · 202 started · 409 busy · 400 no credentials</td></tr>
+      <tr><td class="endpoint"><span class="method">GET</span>/status</td><td>Job state</td><td><code>{refreshing, lastError}</code> — the polling target</td></tr>
+    </tbody>
+  </table></div>
+  <pre><code>GET /graph
+{
+  "nodes": [ { "id": 1, "type": "USER", "key": "user:octocat", "label": "octocat" }, … ],
+  "edges": [ { "id": 9, "source": 1, "target": 4,
+               "type": "WRITTEN_IN", "weight": 491284 }, … ]
+}</code></pre>
+  <p class="caption">Wire format. IDs are per-rebuild (a refresh reassigns them); <code>key</code> is the stable identifier.</p>
+</section>
+
+<section id="frontend">
+  <h2><span class="no">6</span>Frontend</h2>
+  <p>A single static file (<code>src/main/resources/static/index.html</code>) served by the app itself. D3 v7 from a CDN is the only external asset. Three views behind a segmented switcher with <code>#hash</code> deep links:</p>
+  <ul>
+    <li><strong>Graph</strong> — force-directed layout. Node identity is triple-encoded (color + shape + direct label) so it survives colorblindness and grayscale; the 4-slot categorical palette is validated for CVD separation and contrast in both light and dark themes. Edge width maps to weight, normalized <em>per edge type</em> so byte counts don't visually crush commit counts. Drag, zoom, hover tooltips, click-to-focus neighborhood dimming.</li>
+    <li><strong>Stats</strong> — stat tiles plus two horizontal bar charts: languages by share of code (top 12, remainder folded into "Other") and top collaborators. Charts are plain HTML/CSS; each carries a one-line note stating how its numbers are computed.</li>
+    <li><strong>Table</strong> — raw nodes and edges, the accessibility fallback and debugging view.</li>
+  </ul>
+  <h3>Refresh UX</h3>
+  <p>Username input (persisted in <code>localStorage</code>) and a password-type PAT input (deliberately never persisted). The refresh button POSTs both, polls <code>/status</code>, then refetches — showing either a timestamped success or the stored failure reason.</p>
+  <h3>SVG export</h3>
+  <p><code>buildExportSvg()</code> clones the live SVG and makes it self-contained: every <code>var(--…)</code> resolved to concrete color values, label fonts and halos inlined as attributes, hover hit-targets stripped, a theme background and legend added, and the <code>viewBox</code> fitted to content. The result renders identically with no page around it — the requirement for embedding in a GitHub profile README. The function is a global on purpose, so a future CI job can call it through a headless browser.</p>
+</section>
+
+<section id="decisions">
+  <h2><span class="no">7</span>Key decisions</h2>
+  <div class="card">
+    <div class="decision">
+      <h4>Relational tables over a graph database</h4>
+      <p>Neo4j-class tooling buys traversal performance the dataset never needs. Two tables keep ops at zero and the query surface obvious. <span class="verdict">Revisit only if multi-hop queries become a feature.</span></p>
+    </div>
+    <div class="decision">
+      <h4>Full rebuild per refresh, in one transaction</h4>
+      <p>Incremental sync means diffing GitHub state against stored state — a large correctness surface for no user-visible gain at this scale. A transactional rebuild is trivially correct and failure-safe. <span class="verdict">Cost: node IDs change per refresh; accepted, keys are stable.</span></p>
+    </div>
+    <div class="decision">
+      <h4>Polling over webhooks</h4>
+      <p>Webhooks need a public endpoint — impractical for a localhost personal tool. On-demand refresh matches actual usage (look at your graph occasionally). <span class="verdict">Deliberately deferred, not rejected.</span></p>
+    </div>
+    <div class="decision">
+      <h4>Bytes as the WRITTEN_IN weight</h4>
+      <p>The original plan stored per-repo fractions; fractions can't aggregate across repos without repo sizes, which made "most-used language" dishonest. Absolute bytes make every percentage derivable and truthful. <span class="verdict">One-time semantics change; refresh migrates the data.</span></p>
+    </div>
+    <div class="decision">
+      <h4>Per-request credentials with env fallback</h4>
+      <p>Started as server-only env vars; moved to request-scoped so the UI can switch subjects and tokens without restarting. Env vars remain as defaults for headless use. <span class="verdict">The token never persists anywhere.</span></p>
+    </div>
+    <div class="decision">
+      <h4>Same-origin static frontend</h4>
+      <p>Serving the page from Spring Boot removes CORS, a build pipeline, and a second deploy target. One file, no framework. <span class="verdict">Right until the frontend grows real state.</span></p>
+    </div>
+  </div>
+</section>
+
+<section id="security">
+  <h2><span class="no">8</span>Security &amp; privacy</h2>
+  <ul>
+    <li><strong>Token handling.</strong> The PAT travels once in a request body to the user's own backend, lives in memory for the duration of a single ingestion run, and is never persisted, logged, or echoed. Error summaries are constructed to be token-free.</li>
+    <li><strong>Browser storage.</strong> Username is remembered in <code>localStorage</code> for convenience; the token field intentionally is not.</li>
+    <li><strong>Private data in exports.</strong> A token-mode graph contains private repo names. The documented flow for public artifacts (README exports) is: refresh in username-only mode first, then export.</li>
+    <li><strong>Deployment boundary.</strong> The design assumes localhost. Exposing the backend publicly would require HTTPS and auth in front before the token input is safe to use.</li>
+  </ul>
+</section>
+
+<section id="ops">
+  <h2><span class="no">9</span>Operational notes</h2>
+  <ul>
+    <li><strong>Storage.</strong> H2 in file mode at <code>./data/devidentity.mv.db</code>, survives restarts. <code>AUTO_SERVER=TRUE</code> lets a second process (H2 shell, console) connect while the app runs, ending a recurring class of file-lock failures.</li>
+    <li><strong>Tests.</strong> The test profile overrides the datasource to in-memory H2, so builds pass regardless of whether the app is running — and tests can never mutate real ingested data.</li>
+    <li><strong>Rate limits.</strong> Ingestion costs roughly <code>2 + 2·repos</code> API calls. Unauthenticated (60/hr) supports ~25 repos per hour; a token (5000/hr) makes the budget a non-issue. A 403 mid-run rolls back cleanly and reports itself via <code>/status</code>.</li>
+    <li><strong>Verification practice.</strong> Every layer was exercised against the live GitHub API (octocat as the public fixture) and the UI screenshot-verified headlessly in both themes.</li>
+  </ul>
+</section>
+
+<section id="future">
+  <h2><span class="no">10</span>Future work</h2>
+  <ul>
+    <li><strong>Auto-updating README image</strong> — a scheduled GitHub Action that boots the app, refreshes in public mode, calls <code>buildExportSvg()</code> via headless Chrome, and commits light/dark SVGs to the profile repo.</li>
+    <li><strong>Test depth</strong> — unit tests for <code>IngestionService</code> (mocked <code>GitHubClient</code>, canned payloads: weight math, bot filtering, idempotency), <code>@WebMvcTest</code> for the controller, <code>MockRestServiceServer</code> for pagination and auth-mode selection.</li>
+    <li><strong>Postgres swap</strong> — driver + URL change only, if the tool ever leaves localhost.</li>
+    <li><strong>Deeper contribution discovery</strong> — commit search API to extend <code>CONTRIBUTED_TO</code> beyond the ~90-day events window.</li>
+    <li><strong>Graph deltas</strong> — since <code>external_key</code> is stable, two snapshots can be diffed to show "what changed since last month."</li>
+  </ul>
+</section>
+
+</div>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral" });
+</script>
+</body>
+</html>
