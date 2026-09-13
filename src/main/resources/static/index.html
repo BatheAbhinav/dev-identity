@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Developer Identity Graph</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --hairline: #e1e0d9;
+    --border: rgba(11, 11, 11, 0.10);
+    --type-user: #2a78d6;
+    --type-repo: #008300;
+    --type-language: #e87ba4;
+    --type-organization: #eda100;
+    --edge: #c3c2b7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --hairline: #2c2c2a;
+      --border: rgba(255, 255, 255, 0.10);
+      --type-user: #3987e5;
+      --type-repo: #008300;
+      --type-language: #d55181;
+      --type-organization: #c98500;
+      --edge: #383835;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.10);
+    --type-user: #3987e5;
+    --type-repo: #008300;
+    --type-language: #d55181;
+    --type-organization: #c98500;
+    --edge: #383835;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--hairline);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin-right: auto; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-item svg { display: block; }
+  button {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--text-muted); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  input {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    width: 150px;
+  }
+  input::placeholder { color: var(--text-muted); }
+  input:focus { outline: none; border-color: var(--type-user); }
+  .views { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .views .view-btn { border: none; border-radius: 0; background: transparent; }
+  .views .view-btn + .view-btn { border-left: 1px solid var(--border); }
+  .views .view-btn.active { background: var(--hairline); font-weight: 600; }
+  #stats-view {
+    display: none;
+    flex: 1;
+    overflow: auto;
+    background: var(--surface-1);
+    padding: 20px 24px;
+  }
+  #stats-view h2 { font-size: 13px; font-weight: 600; margin: 22px 0 10px; color: var(--text-secondary); }
+  .tiles { display: flex; gap: 12px; flex-wrap: wrap; }
+  .tile {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    min-width: 120px;
+  }
+  .tile .tile-value { font-size: 26px; font-weight: 600; }
+  .tile .tile-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .bar-chart { max-width: 640px; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 150px 1fr 140px;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    font-size: 12.5px;
+  }
+  .bar-row .bar-label {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .bar-track { height: 10px; }
+  .bar-fill { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar-row .bar-value { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar-row .bar-value .sub { color: var(--text-muted); }
+  .stats-note { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; max-width: 640px; }
+  #status { font-size: 12px; color: var(--text-muted); min-width: 130px; }
+  #chart { flex: 1; background: var(--surface-1); min-height: 0; position: relative; }
+  #chart svg { display: block; width: 100%; height: 100%; }
+  .node-label {
+    font-size: 11px;
+    fill: var(--text-secondary);
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: var(--surface-1);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    padding: 7px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    display: none;
+    max-width: 260px;
+    z-index: 10;
+  }
+  #tooltip .tt-sub { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  #table-view {
+    display: none;
+    flex: 1;
+    overflow: auto;
+    background: var(--surface-1);
+    padding: 16px 20px;
+  }
+  #table-view h2 { font-size: 13px; margin: 12px 0 6px; color: var(--text-secondary); }
+  table { border-collapse: collapse; font-size: 12.5px; width: 100%; max-width: 720px; }
+  th, td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--hairline); }
+  th { color: var(--text-muted); font-weight: 500; }
+  td.num { font-variant-numeric: tabular-nums; }
+  #empty {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    text-align: center;
+    padding: 20px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Developer Identity Graph</h1>
+  <div class="legend" id="legend"></div>
+  <span id="status"></span>
+  <input id="username" placeholder="GitHub username" spellcheck="false" autocomplete="off"
+         title="Whose graph to build. Leave empty (with a token) for the token's own user.">
+  <input id="token" type="password" placeholder="PAT (optional)" autocomplete="off"
+         title="Optional personal access token: 5000 req/hr instead of 60. Includes your private and org repos when the username is yours or left empty. Sent only to this backend, never stored.">
+  <div class="views" id="views">
+    <button class="view-btn active" data-view="graph">Graph</button>
+    <button class="view-btn" data-view="stats">Stats</button>
+    <button class="view-btn" data-view="table">Table</button>
+  </div>
+  <button id="refresh-btn">Refresh from GitHub</button>
+</header>
+<div id="chart">
+  <div id="empty">No graph data yet.<br>Enter a GitHub username — or just a token for your own graph,<br>including private repos — and click “Refresh from GitHub”.</div>
+  <div id="tooltip"></div>
+</div>
+<div id="stats-view"></div>
+<div id="table-view"></div>
+
+<script>
+"use strict";
+
+const TYPES = {
+  USER:         { color: "var(--type-user)",         symbol: d3.symbolCircle,   label: "User" },
+  REPO:         { color: "var(--type-repo)",         symbol: d3.symbolSquare,   label: "Repo" },
+  LANGUAGE:     { color: "var(--type-language)",     symbol: d3.symbolDiamond,  label: "Language" },
+  ORGANIZATION: { color: "var(--type-organization)", symbol: d3.symbolTriangle, label: "Organization" },
+};
+
+const chartEl = document.getElementById("chart");
+const tooltip = document.getElementById("tooltip");
+const statusEl = document.getElementById("status");
+const refreshBtn = document.getElementById("refresh-btn");
+const emptyEl = document.getElementById("empty");
+const tableView = document.getElementById("table-view");
+
+// Legend: shape + color + name, so identity never rides on color alone.
+for (const t of Object.values(TYPES)) {
+  const item = document.createElement("span");
+  item.className = "legend-item";
+  item.innerHTML =
+    `<svg width="14" height="14"><path transform="translate(7,7)" fill="${t.color}"
+       d="${d3.symbol(t.symbol, 90)()}"></path></svg>${t.label}`;
+  document.getElementById("legend").appendChild(item);
+}
+
+const svg = d3.select("#chart").append("svg");
+const zoomLayer = svg.append("g");
+svg.call(d3.zoom().scaleExtent([0.2, 6]).on("zoom", e => zoomLayer.attr("transform", e.transform)));
+
+let simulation = null;
+
+function nodeRadius(degree) { return 6 + 2.5 * Math.sqrt(degree); }
+
+function edgeWidth(edge, maxWeightByType) {
+  const max = maxWeightByType.get(edge.type) || 1;
+  return 1 + 3 * (edge.weight / max);
+}
+
+function showTooltip(event, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = "block";
+  const rect = chartEl.getBoundingClientRect();
+  let x = event.clientX - rect.left + 12;
+  let y = event.clientY - rect.top + 12;
+  x = Math.min(x, rect.width - tooltip.offsetWidth - 8);
+  y = Math.min(y, rect.height - tooltip.offsetHeight - 8);
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+function render(graph) {
+  emptyEl.style.display = graph.nodes.length ? "none" : "flex";
+  zoomLayer.selectAll("*").remove();
+  if (simulation) simulation.stop();
+  if (!graph.nodes.length) { renderTables(graph); return; }
+
+  const nodes = graph.nodes.map(n => ({ ...n }));
+  const links = graph.edges.map(e => ({ ...e }));
+
+  const degree = new Map();
+  const maxWeightByType = new Map();
+  for (const l of links) {
+    degree.set(l.source, (degree.get(l.source) || 0) + 1);
+    degree.set(l.target, (degree.get(l.target) || 0) + 1);
+    maxWeightByType.set(l.type, Math.max(maxWeightByType.get(l.type) || 0, l.weight));
+  }
+  for (const n of nodes) n.degree = degree.get(n.id) || 0;
+
+  const width = chartEl.clientWidth, height = chartEl.clientHeight;
+
+  simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(130).strength(0.3))
+    .force("charge", d3.forceManyBody().strength(-500))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius(d => nodeRadius(d.degree) + 26));
+
+  // Per-repo language byte totals, so WRITTEN_IN tooltips can show shares.
+  // (forceLink has already resolved l.source to a node object here.)
+  const repoLangBytes = new Map();
+  for (const l of links) {
+    if (l.type === "WRITTEN_IN") {
+      repoLangBytes.set(l.source.id, (repoLangBytes.get(l.source.id) || 0) + l.weight);
+    }
+  }
+
+  // Visible edges (thin) + a wide transparent twin as the hover hit target.
+  const linkGroup = zoomLayer.append("g");
+  const link = linkGroup.selectAll("g").data(links).join("g");
+  const linkVisible = link.append("line")
+    .attr("stroke", "var(--edge)")
+    .attr("stroke-opacity", 0.85)
+    .attr("stroke-width", d => edgeWidth(d, maxWeightByType));
+  link.append("line")
+    .attr("stroke", "transparent")
+    .attr("stroke-width", 12)
+    .on("mousemove", (event, d) => {
+      let w = d.weight;
+      if (d.type === "WRITTEN_IN") {
+        const total = repoLangBytes.get(d.source.id) || d.weight;
+        w = (100 * d.weight / total).toFixed(1) + "% · " + formatBytes(d.weight);
+      }
+      showTooltip(event,
+        `<strong>${d.type}</strong><div class="tt-sub">${d.sourceLabel} → ${d.targetLabel} · ${w}</div>`);
+    })
+    .on("mouseleave", hideTooltip);
+  for (const l of links) {
+    l.sourceLabel = l.source.label;
+    l.targetLabel = l.target.label;
+  }
+
+  const node = zoomLayer.append("g").selectAll("g").data(nodes).join("g")
+    .style("cursor", "grab")
+    .call(d3.drag()
+      .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end", (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  // Invisible circle behind each symbol keeps the hit target >= 22px.
+  node.append("circle")
+    .attr("r", d => Math.max(11, nodeRadius(d.degree)))
+    .attr("fill", "transparent");
+  node.append("path")
+    .attr("fill", d => (TYPES[d.type] || TYPES.USER).color)
+    .attr("stroke", "var(--surface-1)")
+    .attr("stroke-width", 2)
+    .attr("d", d => d3.symbol((TYPES[d.type] || TYPES.USER).symbol,
+        Math.PI * nodeRadius(d.degree) ** 2)());
+  node.append("text")
+    .attr("class", "node-label")
+    .attr("dx", d => nodeRadius(d.degree) + 5)
+    .attr("dy", 4)
+    .text(d => d.label);
+
+  node.on("mousemove", (event, d) => {
+    const typeLabel = (TYPES[d.type] || TYPES.USER).label;
+    showTooltip(event,
+      `<strong>${d.label}</strong><div class="tt-sub">${typeLabel} · ${d.degree} connection${d.degree === 1 ? "" : "s"}</div>`);
+  }).on("mouseleave", hideTooltip);
+
+  // Click to focus: dim everything not adjacent; click background to reset.
+  node.on("click", (event, d) => {
+    event.stopPropagation();
+    const adjacent = new Set([d.id]);
+    for (const l of links) {
+      if (l.source.id === d.id) adjacent.add(l.target.id);
+      if (l.target.id === d.id) adjacent.add(l.source.id);
+    }
+    node.attr("opacity", n => adjacent.has(n.id) ? 1 : 0.15);
+    linkVisible.attr("stroke-opacity",
+      l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.08);
+  });
+  svg.on("click", () => {
+    node.attr("opacity", 1);
+    linkVisible.attr("stroke-opacity", 0.85);
+  });
+
+  simulation.on("tick", () => {
+    link.selectAll("line")
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+
+  renderTables(graph);
+}
+
+function renderTables(graph) {
+  const byId = new Map(graph.nodes.map(n => [n.id, n]));
+  const nodeRows = graph.nodes.map(n =>
+    `<tr><td>${n.label}</td><td>${(TYPES[n.type] || {}).label || n.type}</td><td>${n.key}</td></tr>`).join("");
+  const edgeRows = graph.edges.map(e =>
+    `<tr><td>${(byId.get(e.source) || {}).label || e.source}</td><td>${e.type}</td>` +
+    `<td>${(byId.get(e.target) || {}).label || e.target}</td><td class="num">${+e.weight.toFixed(4)}</td></tr>`).join("");
+  tableView.innerHTML =
+    `<h2>Nodes (${graph.nodes.length})</h2>
+     <table><thead><tr><th>Label</th><th>Type</th><th>Key</th></tr></thead><tbody>${nodeRows}</tbody></table>
+     <h2>Edges (${graph.edges.length})</h2>
+     <table><thead><tr><th>Source</th><th>Type</th><th>Target</th><th>Weight</th></tr></thead><tbody>${edgeRows}</tbody></table>`;
+}
+
+async function loadGraph() {
+  const res = await fetch("/graph");
+  render(await res.json());
+}
+
+const statsView = document.getElementById("stats-view");
+const viewPanels = { graph: chartEl, stats: statsView, table: tableView };
+
+function switchView(name) {
+  for (const [key, panel] of Object.entries(viewPanels)) {
+    panel.style.display = key === name ? "block" : "none";
+  }
+  document.querySelectorAll(".view-btn").forEach(
+    b => b.classList.toggle("active", b.dataset.view === name));
+  if (name === "stats") loadStats().catch(e => {
+    statsView.innerHTML = `<p class="stats-note">Could not load stats: ${e.message}</p>`;
+  });
+}
+document.getElementById("views").addEventListener("click", e => {
+  if (e.target.dataset.view) {
+    location.hash = e.target.dataset.view === "graph" ? "" : e.target.dataset.view;
+    switchView(e.target.dataset.view);
+  }
+});
+if (viewPanels[location.hash.slice(1)]) switchView(location.hash.slice(1));
+
+function formatBytes(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + " KB";
+  return Math.round(n) + " B";
+}
+
+function barChart(rows, color, formatValue) {
+  const max = Math.max(...rows.map(r => r.size), 1);
+  return `<div class="bar-chart">` + rows.map(r =>
+    `<div class="bar-row">
+       <span class="bar-label" title="${r.label}">${r.label}</span>
+       <div class="bar-track"><div class="bar-fill"
+            style="width:${(100 * r.size / max).toFixed(2)}%;background:${color}"></div></div>
+       <span class="bar-value">${formatValue(r)}</span>
+     </div>`).join("") + `</div>`;
+}
+
+async function loadStats() {
+  const stats = await (await fetch("/stats")).json();
+
+  const tiles = [
+    [stats.repos, "Repositories"],
+    [stats.languages, "Languages"],
+    [stats.collaborators, "Collaborators"],
+    [stats.organizations, "Organizations"],
+  ].map(([v, l]) =>
+    `<div class="tile"><div class="tile-value">${v}</div><div class="tile-label">${l}</div></div>`
+  ).join("");
+
+  // Fold everything past the top 12 languages into "Other".
+  const langs = stats.languageShares.slice(0, 12).map(l => ({ ...l, size: l.share }));
+  const rest = stats.languageShares.slice(12);
+  if (rest.length) {
+    const share = rest.reduce((s, l) => s + l.share, 0);
+    const bytes = rest.reduce((s, l) => s + l.bytes, 0);
+    langs.push({ label: `Other (${rest.length})`, share, bytes, size: share });
+  }
+  const langChart = langs.length
+    ? barChart(langs, "var(--type-language)",
+        l => `${(100 * l.share).toFixed(1)}% <span class="sub">· ${formatBytes(l.bytes)}</span>`)
+    : `<p class="stats-note">No language data yet.</p>`;
+
+  const collabs = stats.topCollaborators.map(c => ({ ...c, size: c.weight }));
+  const collabChart = collabs.length
+    ? barChart(collabs, "var(--type-user)", c => `${Math.round(c.weight)} <span class="sub">shared commits</span>`)
+    : `<p class="stats-note">No collaborators found.</p>`;
+
+  statsView.innerHTML =
+    `<div class="tiles">${tiles}</div>
+     <h2>Languages by share of code</h2>${langChart}
+     <p class="stats-note">Share of total bytes across all ingested repos, from GitHub's per-repo language breakdown.</p>
+     <h2>Top collaborators</h2>${collabChart}
+     <p class="stats-note">Weight is a co-contribution proxy: min(your commits, theirs) per shared repo, summed.</p>`;
+}
+
+const usernameInput = document.getElementById("username");
+const tokenInput = document.getElementById("token");
+usernameInput.value = localStorage.getItem("gh-username") || "";
+usernameInput.addEventListener("change",
+  () => localStorage.setItem("gh-username", usernameInput.value.trim()));
+// The token is deliberately never persisted — it lives in the input field only.
+
+refreshBtn.addEventListener("click", async () => {
+  refreshBtn.disabled = true;
+  statusEl.textContent = "Refreshing from GitHub…";
+  try {
+    const body = {
+      username: usernameInput.value.trim() || null,
+      token: tokenInput.value.trim() || null,
+    };
+    const res = await fetch("/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 202 && res.status !== 409) {
+      let message = "Refresh failed (" + res.status + ")";
+      try {
+        const err = await res.json();
+        if (err.message) message = err.message;
+      } catch (ignored) { /* non-JSON error body */ }
+      statusEl.textContent = message;
+      refreshBtn.disabled = false;
+      return;
+    }
+    let status;
+    while (true) {
+      await new Promise(r => setTimeout(r, 1500));
+      status = await (await fetch("/status")).json();
+      if (!status.refreshing) break;
+    }
+    await loadGraph();
+    if (statsView.style.display === "block") await loadStats();
+    statusEl.textContent = status.lastError
+      ? "Refresh failed: " + status.lastError
+      : "Updated " + new Date().toLocaleTimeString();
+  } catch (e) {
+    statusEl.textContent = "Refresh failed: " + e.message;
+  } finally {
+    refreshBtn.disabled = false;
+  }
+});
+
+loadGraph().catch(e => { statusEl.textContent = "Could not load graph: " + e.message; });
+</script>
+</body>
+</html>

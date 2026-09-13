@@ -1,0 +1,7 @@
+spring:
+  # Tests use a throwaway in-memory database so they never contend with a
+  # running app instance for the file DB lock.
+  datasource:
+    url: jdbc:h2:mem:devidentity-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""

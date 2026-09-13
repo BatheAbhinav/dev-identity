@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: dev_identity
+  datasource:
+    # AUTO_SERVER lets a second process (h2 shell, another app run) connect
+    # while the app is up, instead of failing on the file lock.
+    url: jdbc:h2:file:./data/devidentity;AUTO_SERVER=TRUE
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+
+github:
+  # Optional. Set via environment variable GITHUB_TOKEN — never hardcode here.
+  # With a token: 5000 req/hr, private repos included.
+  # Without: 60 req/hr, public data only.
+  token: ${GITHUB_TOKEN:}
+  # Required in public (unauthenticated) mode; ignored when a token is set
+  # because /user/repos resolves the token's own user.
+  username: ${GITHUB_USERNAME:}
