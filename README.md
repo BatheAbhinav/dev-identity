@@ -52,7 +52,8 @@ One page, three views:
 - **Graph** — force-directed layout (D3). Drag, zoom, hover for details,
   click a node to highlight its neighborhood.
 - **Stats** — most-used languages by share of code, top collaborators,
-  and summary counts.
+  summary counts, and (in token mode) repo traffic for the last 14 days:
+  views, clones, and unique visitors/cloners per repo.
 - **Table** — the raw nodes and edges.
 
 ## API
@@ -61,7 +62,7 @@ One page, three views:
 |---|---|
 | `GET /graph` | Full graph as JSON (`nodes` + `edges`) |
 | `GET /nodes/{id}/neighbors` | A node and everything connected to it |
-| `GET /stats` | Aggregates: language shares, top collaborators, counts |
+| `GET /stats` | Aggregates: language shares, top collaborators, counts, traffic |
 | `POST /refresh` | Re-ingest from GitHub (body: `{"username": "...", "token": "..."}`, both optional) |
 | `GET /status` | Whether a refresh is running, and the last error if one failed |
 

@@ -137,6 +137,17 @@ public class GitHubClient {
             return fetchAllPages("/repos/" + owner + "/" + repo + "/contributors");
         }
 
+        /**
+         * Traffic totals for the last 14 days. kind is "views" or "clones".
+         * Requires push access to the repo; 403 otherwise.
+         */
+        public Map<String, Object> getTraffic(String owner, String repo, String kind) {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}/traffic/{kind}", owner, repo, kind)
+                    .retrieve()
+                    .body(OBJECT);
+        }
+
         /** Public org memberships (all orgs visible to the token, if any). */
         public List<Map<String, Object>> listOrganizations(String username) {
             return restClient.get()

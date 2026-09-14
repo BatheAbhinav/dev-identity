@@ -10,6 +10,8 @@ import abhinav.projects.dev_identity.graph.GraphEdge;
 import abhinav.projects.dev_identity.graph.GraphNode;
 import abhinav.projects.dev_identity.graph.NodeRepository;
 import abhinav.projects.dev_identity.graph.NodeType;
+import abhinav.projects.dev_identity.graph.RepoTraffic;
+import abhinav.projects.dev_identity.graph.RepoTrafficRepository;
 import abhinav.projects.dev_identity.ingestion.GitHubClient;
 import abhinav.projects.dev_identity.ingestion.IngestionService;
 import java.util.Comparator;
@@ -36,15 +38,18 @@ public class GraphController {
     private final EdgeRepository edgeRepository;
     private final IngestionService ingestionService;
     private final GitHubClient gitHubClient;
+    private final RepoTrafficRepository trafficRepository;
 
     public GraphController(NodeRepository nodeRepository,
                            EdgeRepository edgeRepository,
                            IngestionService ingestionService,
-                           GitHubClient gitHubClient) {
+                           GitHubClient gitHubClient,
+                           RepoTrafficRepository trafficRepository) {
         this.nodeRepository = nodeRepository;
         this.edgeRepository = edgeRepository;
         this.ingestionService = ingestionService;
         this.gitHubClient = gitHubClient;
+        this.trafficRepository = trafficRepository;
     }
 
     @GetMapping("/graph")
@@ -106,7 +111,36 @@ public class GraphController {
                 Math.max(0, userCount - 1),
                 nodeCounts.getOrDefault(NodeType.ORGANIZATION, 0L),
                 languageShares,
-                topCollaborators);
+                topCollaborators,
+                trafficStats());
+    }
+
+    private GraphDtos.TrafficStats trafficStats() {
+        List<RepoTraffic> traffic = trafficRepository.findAll();
+        if (traffic.isEmpty()) {
+            return null;
+        }
+        List<GraphDtos.RepoTrafficDto> byViews = traffic.stream()
+                .sorted(Comparator.comparingLong(RepoTraffic::getViews).reversed())
+                .limit(8)
+                .map(GraphController::toTrafficDto)
+                .toList();
+        List<GraphDtos.RepoTrafficDto> byClones = traffic.stream()
+                .sorted(Comparator.comparingLong(RepoTraffic::getClones).reversed())
+                .limit(8)
+                .map(GraphController::toTrafficDto)
+                .toList();
+        return new GraphDtos.TrafficStats(
+                traffic.stream().mapToLong(RepoTraffic::getViews).sum(),
+                traffic.stream().mapToLong(RepoTraffic::getUniqueVisitors).sum(),
+                traffic.stream().mapToLong(RepoTraffic::getClones).sum(),
+                traffic.stream().mapToLong(RepoTraffic::getUniqueCloners).sum(),
+                byViews, byClones);
+    }
+
+    private static GraphDtos.RepoTrafficDto toTrafficDto(RepoTraffic t) {
+        return new GraphDtos.RepoTrafficDto(t.getRepoLabel(), t.getViews(),
+                t.getUniqueVisitors(), t.getClones(), t.getUniqueCloners());
     }
 
     @GetMapping("/status")

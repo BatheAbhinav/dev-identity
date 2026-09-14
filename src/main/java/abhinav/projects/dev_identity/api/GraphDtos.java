@@ -51,8 +51,19 @@ public final class GraphDtos {
     public record CollaboratorWeight(String label, double weight) {
     }
 
+    public record RepoTrafficDto(String label, long views, long uniqueVisitors,
+                                 long clones, long uniqueCloners) {
+    }
+
+    /** GitHub's rolling 14-day window; null when no traffic data was ingested. */
+    public record TrafficStats(long views, long uniqueVisitors, long clones, long uniqueCloners,
+                               List<RepoTrafficDto> topByViews,
+                               List<RepoTrafficDto> topByClones) {
+    }
+
     public record StatsResponse(long repos, long languages, long collaborators, long organizations,
                                 List<LanguageShare> languageShares,
-                                List<CollaboratorWeight> topCollaborators) {
+                                List<CollaboratorWeight> topCollaborators,
+                                TrafficStats traffic) {
     }
 }
