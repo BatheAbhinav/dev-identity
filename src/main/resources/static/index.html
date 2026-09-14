@@ -569,12 +569,44 @@ async function loadStats() {
     ? barChart(collabs, "var(--type-user)", c => `${Math.round(c.weight)} <span class="sub">shared commits</span>`)
     : `<p class="stats-note">No collaborators found.</p>`;
 
+  let trafficSection;
+  if (stats.traffic) {
+    const t = stats.traffic;
+    const trafficTiles = [
+      [t.views, "Views"],
+      [t.uniqueVisitors, "Unique visitors"],
+      [t.clones, "Clones"],
+      [t.uniqueCloners, "Unique cloners"],
+    ].map(([v, l]) =>
+      `<div class="tile"><div class="tile-value">${v}</div><div class="tile-label">${l}</div></div>`
+    ).join("");
+    const viewRows = t.topByViews.filter(r => r.views > 0).map(r => ({ ...r, size: r.views }));
+    const cloneRows = t.topByClones.filter(r => r.clones > 0).map(r => ({ ...r, size: r.clones }));
+    trafficSection =
+      `<div class="tiles">${trafficTiles}</div>` +
+      (viewRows.length
+        ? `<h2>Most viewed repos</h2>` + barChart(viewRows, "var(--type-repo)",
+            r => `${r.views} <span class="sub">· ${r.uniqueVisitors} unique</span>`)
+        : "") +
+      (cloneRows.length
+        ? `<h2>Most cloned repos</h2>` + barChart(cloneRows, "var(--type-organization)",
+            r => `${r.clones} <span class="sub">· ${r.uniqueCloners} unique</span>`)
+        : "");
+  } else {
+    trafficSection =
+      `<p class="stats-note">No traffic data. GitHub's traffic API needs a refresh with a
+       token that has push access to your repos (classic PAT with <code>repo</code> scope,
+       or fine-grained with Administration read).</p>`;
+  }
+
   statsView.innerHTML =
     `<div class="tiles">${tiles}</div>
      <h2>Languages by share of code</h2>${langChart}
      <p class="stats-note">Share of total bytes across all ingested repos, from GitHub's per-repo language breakdown.</p>
      <h2>Top collaborators</h2>${collabChart}
-     <p class="stats-note">Weight is a co-contribution proxy: min(your commits, theirs) per shared repo, summed.</p>`;
+     <p class="stats-note">Weight is a co-contribution proxy: min(your commits, theirs) per shared repo, summed.</p>
+     <h2>Traffic — last 14 days</h2>${trafficSection}
+     <p class="stats-note">From GitHub's traffic API (rolling 14-day window, repos with push access only).</p>`;
 }
 
 const usernameInput = document.getElementById("username");

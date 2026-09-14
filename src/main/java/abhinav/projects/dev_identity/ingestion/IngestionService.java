@@ -6,6 +6,8 @@ import abhinav.projects.dev_identity.graph.GraphEdge;
 import abhinav.projects.dev_identity.graph.GraphNode;
 import abhinav.projects.dev_identity.graph.NodeRepository;
 import abhinav.projects.dev_identity.graph.NodeType;
+import abhinav.projects.dev_identity.graph.RepoTraffic;
+import abhinav.projects.dev_identity.graph.RepoTrafficRepository;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,15 +35,18 @@ public class IngestionService {
     private final GitHubClient gitHubClient;
     private final NodeRepository nodeRepository;
     private final EdgeRepository edgeRepository;
+    private final RepoTrafficRepository trafficRepository;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile String lastError;
 
     public IngestionService(GitHubClient gitHubClient,
                             NodeRepository nodeRepository,
-                            EdgeRepository edgeRepository) {
+                            EdgeRepository edgeRepository,
+                            RepoTrafficRepository trafficRepository) {
         this.gitHubClient = gitHubClient;
         this.nodeRepository = nodeRepository;
         this.edgeRepository = edgeRepository;
+        this.trafficRepository = trafficRepository;
     }
 
     public boolean isRunning() {
@@ -73,6 +78,7 @@ public class IngestionService {
 
             edgeRepository.deleteAllInBatch();
             nodeRepository.deleteAllInBatch();
+            trafficRepository.deleteAllInBatch();
 
             RunContext ctx = new RunContext(new LinkedHashMap<>(), new LinkedHashMap<>());
             GraphNode subjectNode = node(ctx, NodeType.USER, "user:" + subjectLogin, subjectLogin);
@@ -100,6 +106,14 @@ public class IngestionService {
                 } catch (RestClientResponseException e) {
                     // Empty repos 404/409 on some endpoints; don't abort the run.
                     log.warn("Skipping details for {}: GitHub returned {}", fullName, e.getStatusCode());
+                }
+                if (gh.isOwnGraph()) {
+                    try {
+                        ingestTraffic(gh, fullName, ownerAndName[0], ownerAndName[1]);
+                    } catch (RestClientResponseException e) {
+                        // Traffic needs push access; expected to fail on some org repos.
+                        log.debug("No traffic access for {}: {}", fullName, e.getStatusCode());
+                    }
                 }
             }
 
@@ -211,6 +225,23 @@ public class IngestionService {
             GraphNode repoNode = node(ctx, NodeType.REPO, "repo:" + fullName, fullName);
             edge(ctx, subjectNode, repoNode, EdgeType.CONTRIBUTED_TO, count);
         });
+    }
+
+    private void ingestTraffic(GitHubClient.GitHubAccess gh, String fullName, String owner, String repo) {
+        Map<String, Object> views = gh.getTraffic(owner, repo, "views");
+        Map<String, Object> clones = gh.getTraffic(owner, repo, "clones");
+        long viewCount = count(views, "count");
+        long cloneCount = count(clones, "count");
+        if (viewCount == 0 && cloneCount == 0) {
+            return;
+        }
+        trafficRepository.save(new RepoTraffic("repo:" + fullName, fullName,
+                viewCount, count(views, "uniques"), cloneCount, count(clones, "uniques")));
+    }
+
+    private static long count(Map<String, Object> body, String key) {
+        Object value = body == null ? null : body.get(key);
+        return value instanceof Number n ? n.longValue() : 0;
     }
 
     /** Short, token-free summary for the /status endpoint. */
